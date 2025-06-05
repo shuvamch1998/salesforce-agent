@@ -4,6 +4,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from utils import ThrottledDuckDuckGoSearch
 import requests
+import os
 
 # Monkey-patch WebBaseLoader to use a custom User-Agent
 def custom_requests_get(url, **kwargs):
@@ -24,24 +25,37 @@ def load_and_index_salesforce_docs(urls):
     docs = []
     for url in urls:
         loader = WebBaseLoader(url)
-        loader.requests_get = custom_requests_get  # <- override here
+        loader.requests_get = custom_requests_get  # override with UA
         docs.extend(loader.load())
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     chunks = splitter.split_documents(docs)
 
-    print("[INFO] Embedding chunks using HuggingFaceEmbeddings...")
+    print("📌 [INFO] Embedding chunks using HuggingFaceEmbeddings...")
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     vectorstore.save_local("faiss_index")
     print("✅ [INFO] FAISS index saved to `faiss_index/`")
 
-# STEP 2: Load retriever
+# STEP 2: Load retriever from Hugging Face hosted index
 def load_retriever():
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    return FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True).as_retriever()
+    print("🌐 [INFO] Downloading FAISS index from Hugging Face...")
 
-# STEP 3: Answer using FAISS + fallback DuckDuckGo
+    os.makedirs("faiss_files", exist_ok=True)
+    base_url = "https://huggingface.co/shuvam1998/salesforce-rag-faiss/resolve/main"
+
+    for filename in ["index.faiss", "index.pkl"]:
+        url = f"{base_url}/{filename}"
+        r = requests.get(url)
+        with open(os.path.join("faiss_files", filename), "wb") as f:
+            f.write(r.content)
+
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    vectorstore = FAISS.load_local("faiss_files", embeddings, allow_dangerous_deserialization=True)
+    print("✅ [INFO] Retriever loaded from remote index.")
+    return vectorstore.as_retriever()
+
+# STEP 3: Answer using FAISS + DuckDuckGo fallback
 search = ThrottledDuckDuckGoSearch()
 
 def answer_with_context(query, retriever, llm):
@@ -53,16 +67,15 @@ def answer_with_context(query, retriever, llm):
         context = search.run(query)
 
     prompt = f"""
-    You are a Salesforce assistant. Use the context below to answer the user's question as accurately as possible.
+You are a Salesforce assistant. Use the context below to answer the user's question as accurately as possible.
 
-    Context:
-    {context}
+Context:
+{context}
 
-    Question: {query}
-    """
+Question: {query}
+"""
     return llm.invoke(prompt)
 
-# Optional one-time index creation
+# Optional local indexing (one-time use)
 if __name__ == "__main__":
     load_and_index_salesforce_docs(urls)
-
