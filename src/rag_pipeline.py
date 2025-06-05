@@ -41,7 +41,7 @@ def load_and_index_salesforce_docs(urls):
 def load_retriever():
     print("[INFO] Downloading FAISS index from Hugging Face...")
 
-    repo_id = "shuvamch1998/salesforce-rag-faiss"
+    repo_id = "shuvamch1998/salesforce-agent-faiss"
     filenames = ["index.faiss", "index.pkl"]
     os.makedirs("faiss_files", exist_ok=True)
 
