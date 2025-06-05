@@ -1,26 +1,27 @@
 import os
 import requests
-from langchain_community.document_loaders import WebBaseLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.document_loaders import WebBaseLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from utils import ThrottledDuckDuckGoSearch
 
-# Salesforce documentation URLs (used only for local indexing)
+# Optional: URLs for local document indexing
 urls = [
     "https://developer.salesforce.com/docs/platform",
     "https://trailhead.salesforce.com/en/content/learn/modules"
 ]
 
-# Custom User-Agent to avoid blocking
+# Monkey patch to fix header issues during scraping
 def custom_requests_get(url, **kwargs):
     headers = kwargs.pop("headers", {})
     headers.update({"User-Agent": "Mozilla/5.0"})
     return requests.get(url, headers=headers, **kwargs)
 
-# STEP 1: Index Salesforce docs (optional)
+# STEP 1 (optional): Run once to locally index Salesforce docs
 def load_and_index_salesforce_docs(urls):
     print("\n🔍 [INFO] Loading Salesforce docs...")
+
     docs = []
     for url in urls:
         loader = WebBaseLoader(url)
@@ -36,24 +37,27 @@ def load_and_index_salesforce_docs(urls):
     vectorstore.save_local("faiss_files")
     print("✅ [INFO] FAISS index saved to `faiss_files/`")
 
-# STEP 2: Load from Hugging Face repo
 
+# STEP 2: Load FAISS from public Hugging Face repo
 def load_retriever():
     print("[INFO] Downloading FAISS index from Hugging Face...")
 
-    repo_id = "shuvamch1998/salesforce-agent-faiss"
-    filenames = ["index.faiss", "index.pkl"]
+    base_url = "https://huggingface.co/shuvamch1998/salesforce-agent-faiss/resolve/main"
     os.makedirs("faiss_files", exist_ok=True)
 
-    for filename in filenames:
-        file_path = hf_hub_download(repo_id=repo_id, filename=filename)
-        dest_path = os.path.join("faiss_files", filename)
-        os.rename(file_path, dest_path)
+    for filename in ["index.faiss", "index.pkl"]:
+        url = f"{base_url}/{filename}"
+        r = requests.get(url)
+        if r.status_code != 200:
+            raise RuntimeError(f"Failed to download {filename}: {r.status_code}")
+        with open(os.path.join("faiss_files", filename), "wb") as f:
+            f.write(r.content)
 
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     return FAISS.load_local("faiss_files", embeddings, allow_dangerous_deserialization=True).as_retriever()
 
-# STEP 3: Answer with retrieved context or fallback
+
+# STEP 3: Answer a question using retrieved context or fallback
 search = ThrottledDuckDuckGoSearch()
 
 def answer_with_context(query, retriever, llm):
@@ -74,6 +78,6 @@ def answer_with_context(query, retriever, llm):
     """
     return llm.invoke(prompt)
 
-# Optional run locally
+# Uncomment this if you want to locally run the indexer
 # if __name__ == "__main__":
 #     load_and_index_salesforce_docs(urls)
