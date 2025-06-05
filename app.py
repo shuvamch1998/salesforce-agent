@@ -2,8 +2,10 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 from langchain_community.llms import DeepInfra
-from src.rag_pipeline import load_retriever, answer_with_context
-from src.utils import ThrottledDuckDuckGoSearch
+from rag_pipeline import load_retriever, answer_with_context
+
+from utils import ThrottledDuckDuckGoSearch
+
 
 
 load_dotenv()
