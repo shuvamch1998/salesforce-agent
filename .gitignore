@@ -1,0 +1,21 @@
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# FAISS index (rebuildable)
+faiss_index/
+
+# VS Code settings (optional)
+.vscode/
+
+# OS metadata
+.DS_Store
+Thumbs.db

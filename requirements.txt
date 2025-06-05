@@ -1,0 +1,33 @@
+# Core LLM & agent framework
+langchain>=0.1.14
+langchain-community>=0.0.26
+
+# Embeddings + vector DB (FAISS)
+faiss-cpu>=1.7.4
+
+# Web scraping for Salesforce docs
+beautifulsoup4
+html2text
+requests
+
+
+# Optional: dynamic filtering (NER etc.)
+spacy
+
+
+# Web search tool (optional)
+duckduckgo-search>=1.1.1
+
+# Env file loading (optional)
+python-dotenv
+
+# Streamlit web UI
+streamlit
+
+langchain
+langchain-community
+langchain-huggingface
+langchain-ollama
+faiss-cpu
+sentence-transformers
+duckduckgo-search
