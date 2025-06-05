@@ -1,61 +1,60 @@
+import os
+import requests
 from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from huggingface_hub import hf_hub_download
 from utils import ThrottledDuckDuckGoSearch
-import requests
-import os
 
-# Monkey-patch WebBaseLoader to use a custom User-Agent
-def custom_requests_get(url, **kwargs):
-    headers = kwargs.pop("headers", {})
-    headers.update({"User-Agent": "Mozilla/5.0"})
-    return requests.get(url, headers=headers, **kwargs)
-
-# Salesforce documentation URLs
+# Salesforce documentation URLs (used for offline generation only)
 urls = [
     "https://developer.salesforce.com/docs/platform",
     "https://trailhead.salesforce.com/en/content/learn/modules"
 ]
 
-# STEP 1: Load and index Salesforce documentation
+# Monkey patch to override default headers
+def custom_requests_get(url, **kwargs):
+    headers = kwargs.pop("headers", {})
+    headers.update({"User-Agent": "Mozilla/5.0"})
+    return requests.get(url, headers=headers, **kwargs)
+
+# STEP 1: Load and index Salesforce docs locally (optional run-once script)
 def load_and_index_salesforce_docs(urls):
     print("\n🔍 [INFO] Loading Salesforce docs...")
 
     docs = []
     for url in urls:
         loader = WebBaseLoader(url)
-        loader.requests_get = custom_requests_get  # override with UA
+        loader.requests_get = custom_requests_get  # override here
         docs.extend(loader.load())
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     chunks = splitter.split_documents(docs)
 
-    print("📌 [INFO] Embedding chunks using HuggingFaceEmbeddings...")
+    print("[INFO] Embedding chunks using HuggingFaceEmbeddings...")
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
-    vectorstore.save_local("faiss_index")
-    print("✅ [INFO] FAISS index saved to `faiss_index/`")
+    vectorstore.save_local("faiss_files")
+    print("✅ [INFO] FAISS index saved to `faiss_files/`")
 
-# STEP 2: Load retriever from Hugging Face hosted index
+# STEP 2: Load FAISS index from Hugging Face Hub
 def load_retriever():
-    print("🌐 [INFO] Downloading FAISS index from Hugging Face...")
+    print("[INFO] Downloading FAISS index from Hugging Face Hub...")
+    
+    # Update with your HF repo ID
+    repo_id = "shuvamch1998/salesforce-rag-faiss"
 
-    os.makedirs("faiss_files", exist_ok=True)
-    base_url = "https://huggingface.co/shuvam1998/salesforce-rag-faiss/resolve/main"
-
-    for filename in ["index.faiss", "index.pkl"]:
-        url = f"{base_url}/{filename}"
-        r = requests.get(url)
-        with open(os.path.join("faiss_files", filename), "wb") as f:
-            f.write(r.content)
+    faiss_path = hf_hub_download(repo_id=repo_id, filename="index.faiss")
+    pkl_path = hf_hub_download(repo_id=repo_id, filename="index.pkl")
 
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    vectorstore = FAISS.load_local("faiss_files", embeddings, allow_dangerous_deserialization=True)
-    print("✅ [INFO] Retriever loaded from remote index.")
-    return vectorstore.as_retriever()
 
-# STEP 3: Answer using FAISS + DuckDuckGo fallback
+    # FAISS expects the folder path, so we strip off the file
+    index_folder = os.path.dirname(faiss_path)
+    return FAISS.load_local(index_folder, embeddings, allow_dangerous_deserialization=True).as_retriever()
+
+# STEP 3: Answer with retrieved context or fallback
 search = ThrottledDuckDuckGoSearch()
 
 def answer_with_context(query, retriever, llm):
@@ -67,15 +66,15 @@ def answer_with_context(query, retriever, llm):
         context = search.run(query)
 
     prompt = f"""
-You are a Salesforce assistant. Use the context below to answer the user's question as accurately as possible.
+    You are a helpful Salesforce assistant. Use the context below to answer the user's question as accurately as possible.
 
-Context:
-{context}
+    Context:
+    {context}
 
-Question: {query}
-"""
+    Question: {query}
+    """
     return llm.invoke(prompt)
 
-# Optional local indexing (one-time use)
-if __name__ == "__main__":
-    load_and_index_salesforce_docs(urls)
+# Uncomment and run locally (not for Streamlit Cloud)
+ #if __name__ == "__main__":
+  #   load_and_index_salesforce_docs(urls)
