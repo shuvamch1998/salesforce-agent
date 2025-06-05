@@ -37,19 +37,18 @@ def load_and_index_salesforce_docs(urls):
     print("✅ [INFO] FAISS index saved to `faiss_files/`")
 
 # STEP 2: Load from Hugging Face repo
+
 def load_retriever():
     print("[INFO] Downloading FAISS index from Hugging Face...")
 
-    base_url = "https://huggingface.co/shuvamch1998/salesforce-rag-faiss/resolve/main"
+    repo_id = "shuvamch1998/salesforce-rag-faiss"
+    filenames = ["index.faiss", "index.pkl"]
     os.makedirs("faiss_files", exist_ok=True)
 
-    for filename in ["index.faiss", "index.pkl"]:
-        url = f"{base_url}/{filename}"
-        r = requests.get(url)
-        if r.status_code != 200:
-            raise RuntimeError(f"Failed to download {filename}: {r.status_code}")
-        with open(os.path.join("faiss_files", filename), "wb") as f:
-            f.write(r.content)
+    for filename in filenames:
+        file_path = hf_hub_download(repo_id=repo_id, filename=filename)
+        dest_path = os.path.join("faiss_files", filename)
+        os.rename(file_path, dest_path)
 
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     return FAISS.load_local("faiss_files", embeddings, allow_dangerous_deserialization=True).as_retriever()
