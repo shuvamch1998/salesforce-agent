@@ -39,14 +39,17 @@ def load_and_index_salesforce_docs(urls):
 
 
 # STEP 2: Load FAISS from public Hugging Face repo
+
+
 def load_retriever():
     print("[INFO] Downloading FAISS index from Hugging Face...")
 
-    base_url = "https://huggingface.co/shuvamch1998/salesforce-agent-faiss/resolve/main"
+    base_url = "https://huggingface.co/shuvam1998/salesforce-agent-faiss/resolve/main"
     os.makedirs("faiss_files", exist_ok=True)
 
     for filename in ["index.faiss", "index.pkl"]:
         url = f"{base_url}/{filename}"
+        print(f"[DEBUG] Downloading from {url}")
         r = requests.get(url)
         if r.status_code != 200:
             raise RuntimeError(f"Failed to download {filename}: {r.status_code}")
@@ -55,6 +58,7 @@ def load_retriever():
 
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     return FAISS.load_local("faiss_files", embeddings, allow_dangerous_deserialization=True).as_retriever()
+
 
 
 # STEP 3: Answer a question using retrieved context or fallback
