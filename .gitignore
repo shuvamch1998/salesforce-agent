@@ -10,8 +10,7 @@ __pycache__/
 *.pyo
 *.pyd
 
-# FAISS index (rebuildable)
-faiss_index/
+
 
 # VS Code settings (optional)
 .vscode/

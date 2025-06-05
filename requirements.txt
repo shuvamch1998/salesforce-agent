@@ -31,3 +31,4 @@ langchain-ollama
 faiss-cpu
 sentence-transformers
 duckduckgo-search
+huggingface_hub
